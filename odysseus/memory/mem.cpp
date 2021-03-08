@@ -61,5 +61,17 @@ void mem::freeAligned(void *p_mem) {
   }
 }
 
+mem::MemPtr mem::allocateBlock(size_t size_in_bytes, mem::Context context) {
+  MemPtr ptr{};
+  if (context == Context::HEAP)
+    ptr.ptr = new u8[size_in_bytes];
+  return ptr;
+}
+
+void mem::freeBlock(mem::MemPtr &ptr) {
+  if (ptr.context == Context::HEAP)
+    delete[] reinterpret_cast<u8 *>(ptr.ptr);
+}
+
 }
 

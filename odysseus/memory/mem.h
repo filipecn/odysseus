@@ -40,8 +40,21 @@ public:
   /****************************************************************************
                                STATIC METHODS
   ****************************************************************************/
+  enum class Context {
+    HEAP,
+    SINGLE_FRAME,
+  };
+  /// Object return by mem functions. Holds the pointer to allocated memory.
+  struct MemPtr {
+    void *ptr{nullptr};
+    u32 handle{0};
+    Context context{Context::HEAP};
+  };
+  /****************************************************************************
+                               STATIC METHODS
+  ****************************************************************************/
 
-  /// Shift **address** upwards if necessary to ensure it is aligned to
+  /// Shifts **address** upwards if necessary to ensure it is aligned to
   /// **align** number of bytes.
   /// \param address **[in]** memory address
   /// \param align **[in]** number of bytes
@@ -51,7 +64,7 @@ public:
     ASSERT((align & mask) == 0);
     return (address + mask) & ~mask;
   }
-  /// Shift pointer **ptr** upwards if necessary to ensure it is aligned to
+  /// Shifts pointer **ptr** upwards if necessary to ensure it is aligned to
   /// **align** number of bytes.
   /// \tparam T data type
   /// \param ptr **[in]** pointer
@@ -63,12 +76,12 @@ public:
     const uintptr_t addr_aligned = alignAddress(addr, align);
     return reinterpret_cast<T *>(addr_aligned);
   }
-  /// Allocate **size** bytes of memory aligned by **align** bytes.
+  /// Allocates **size** bytes of memory aligned by **align** bytes.
   /// \param bytes **[in]** memory size in bytes
   /// \param align **[in]** number of bytes of alignment
   /// \return pointer to allocated memory
   static void *allocAligned(size_t size, size_t align);
-  /// Free memory allocated by allocAligned function
+  /// Frees memory allocated by allocAligned function
   /// \param p_mem pointer to aligned memory block
   static void freeAligned(void *p_mem);
   ///
@@ -77,6 +90,14 @@ public:
     static mem singleton;
     return singleton;
   }
+  ///
+  /// \param size_in_bytes
+  /// \param context
+  /// \return
+  static MemPtr allocateBlock(size_t size_in_bytes, Context context);
+  ///
+  /// \param ptr
+  static void freeBlock(MemPtr& ptr);
 
   mem &operator=(const mem &) = delete;
 

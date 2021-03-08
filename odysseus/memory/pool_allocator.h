@@ -19,58 +19,61 @@
 /// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 /// IN THE SOFTWARE.
 ///
-///\file stack_allocator.h
+///\file pool_allocator.h
 ///\author FilipeCN (filipedecn@gmail.com)
-///\date 2021-03-06
+///\date 2021-03-07
 ///
 ///\brief
 
-#ifndef ODYSSEUS_ODYSSEUS_MEMORY_STACK_ALLOCATOR_H
-#define ODYSSEUS_ODYSSEUS_MEMORY_STACK_ALLOCATOR_H
+#ifndef ODYSSEUS_ODYSSEUS_MEMORY_POOL_ALLOCATOR_H
+#define ODYSSEUS_ODYSSEUS_MEMORY_POOL_ALLOCATOR_H
 
-#include <ponos/common/defs.h>
+#include <odysseus/memory/mem.h>
 
 namespace odysseus {
 
-/// RAII Stack Allocator
-class StackAllocator {
+/// RAII Pool Allocator
+/// Stores a pool of objects of same size and allows arbitrary destruction order.
+class PoolAllocator {
 public:
   /****************************************************************************
                                  CONSTRUCTORS
   ****************************************************************************/
-  /// \param size_in_bytes total memory capacity
-  explicit StackAllocator(u32 size_in_bytes);
   ///
-  ~StackAllocator();
+  /// \param object_size_in_bytes
+  /// \param object_count
+  /// \param context
+  PoolAllocator(u32 object_size_in_bytes, u32 object_count, mem::Context context = mem::Context::HEAP);
+  ///
+  ~PoolAllocator();
   /****************************************************************************
-                                    METHODS
+                                    SIZE
   ****************************************************************************/
-  /// \return total stack capacity (in bytes)
+  /// \return total memory size in bytes
   [[nodiscard]] u32 capacityInBytes() const;
-  /// \return available size that can be allocated
-  [[nodiscard]] u32 availableSizeInBytes() const;
-  /// All previous data is deleted and markers get invalid
-  /// \param size_in_bytes total memory capacity
-  void resize(u32 size_in_bytes);
-  /// Allocates a new block from stack top
-  /// \param block_size_in_bytes
-  /// \return pointer to the new allocated block
-  void *allocate(u64 block_size_in_bytes);
-  /// \return a marker to the current stack top
-  [[nodiscard]] u32 topMarker() const;
-  /// Roll the stack back to a previous marker point
-  /// \param marker
-  void freeToMarker(u32 marker);
-  /// Roll stack back to zero
-  void clear();
-
+  /// \return capacity in number of objects
+  [[nodiscard]] u32 capacity() const;
+  /// \return number of allocated objects
+  [[nodiscard]] u32 size() const;
+  /// \return
+  [[nodiscard]] u32 objectSizeInBytes() const;
+  /****************************************************************************
+                                    ALLOCATION
+  ****************************************************************************/
+  ///
+  /// \return
+  void *allocate();
+  ///
+  /// \param ptr
+  void freeObject(void *ptr);
 private:
-  u8 *data_{nullptr};
+  u32 size_{0};
   u32 capacity_{0};
-  u32 marker_{0};
-
+  u32 object_size_in_bytes_{0};
+  u32 head_{0};
+  mem::MemPtr data_{};
 };
 
 }
 
-#endif //ODYSSEUS_ODYSSEUS_MEMORY_STACK_ALLOCATOR_H
+#endif //ODYSSEUS_ODYSSEUS_MEMORY_POOL_ALLOCATOR_H
