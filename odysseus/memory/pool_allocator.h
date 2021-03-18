@@ -39,6 +39,7 @@ public:
   /****************************************************************************
                                  CONSTRUCTORS
   ****************************************************************************/
+  PoolAllocator() = default;
   ///
   /// \param object_size_in_bytes
   /// \param object_count
@@ -71,7 +72,7 @@ private:
   u32 capacity_{0};
   u32 object_size_in_bytes_{0};
   u32 head_{0};
-  mem::MemPtr data_{};
+  void* data_{};
 };
 
 }

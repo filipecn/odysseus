@@ -19,7 +19,7 @@
 /// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 /// IN THE SOFTWARE.
 ///
-///\file pool_allocator.cpp.c
+///\file pool_allocator.cpp
 ///\author FilipeCN (filipedecn@gmail.com)
 ///\date 2021-03-07
 ///
@@ -31,6 +31,11 @@ namespace odysseus {
 /******************************************************************************
  *                                 DEBUG
 ******************************************************************************/
+///
+/// \param ptr
+/// \param head
+/// \param object_count
+/// \param object_size_in_bytes
 void dumpAvailableList(void *ptr, u32 head, u32 object_count, u32 object_size_in_bytes) {
   auto *p = reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(ptr) + head * object_size_in_bytes);
   auto *end = reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(ptr) + object_count * object_size_in_bytes);
@@ -46,17 +51,17 @@ void dumpAvailableList(void *ptr, u32 head, u32 object_count, u32 object_size_in
 PoolAllocator::PoolAllocator(u32 object_size_in_bytes, u32 object_count, mem::Context context)
     : capacity_{object_count}, object_size_in_bytes_{object_size_in_bytes} {
   ASSERT(object_size_in_bytes >= sizeof(u32));
-  data_ = mem::allocateBlock(object_size_in_bytes * object_count, context);
+//  data_ = mem::allocateBlock(object_size_in_bytes * object_count, context);
   // create linked list for free objects
-  auto *p = reinterpret_cast<u32 *>(data_.ptr);
+  auto *p = reinterpret_cast<u32 *>(data_);
   for (uintptr_t i = 0; i < object_count; i++) {
     *p = i + 1;
-    p = reinterpret_cast<u32 *> (reinterpret_cast<u8 *>(data_.ptr) + (i + 1) * object_size_in_bytes);
+    p = reinterpret_cast<u32 *> (reinterpret_cast<u8 *>(data_) + (i + 1) * object_size_in_bytes);
   }
 }
 
 PoolAllocator::~PoolAllocator() {
-  mem::freeBlock(data_);
+//  mem::freeBlock(data_);
 }
 
 u32 PoolAllocator::capacityInBytes() const {
@@ -80,7 +85,7 @@ void *PoolAllocator::allocate() {
     return nullptr;
   size_++;
   // get head pointer
-  auto *p = reinterpret_cast<u8 *>(data_.ptr) + head_ * object_size_in_bytes_;
+  auto *p = reinterpret_cast<u8 *>(data_) + head_ * object_size_in_bytes_;
   // move head
   head_ = *reinterpret_cast<u32 *>(p);
   return reinterpret_cast<void *>(p);
@@ -88,8 +93,8 @@ void *PoolAllocator::allocate() {
 
 void PoolAllocator::freeObject(void *ptr) {
   ASSERT(size_);
-  ptrdiff_t d = reinterpret_cast<u8 *>(ptr) - reinterpret_cast<u8 *>(data_.ptr);
-  auto *p = reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(data_.ptr) + d);
+  ptrdiff_t d = reinterpret_cast<u8 *>(ptr) - reinterpret_cast<u8 *>(data_);
+  auto *p = reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(data_) + d);
   *p = head_;
   head_ = d / object_size_in_bytes_;
   size_--;

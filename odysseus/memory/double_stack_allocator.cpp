@@ -19,7 +19,7 @@
 /// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 /// IN THE SOFTWARE.
 ///
-///\file double_stack_allocator.cpp.c
+///\file double_stack_allocator.cpp
 ///\author FilipeCN (filipedecn@gmail.com)
 ///\date 2021-03-07
 ///
@@ -34,7 +34,7 @@ DoubleStackAllocator::DoubleStackAllocator(u32 capacity_in_bytes, mem::Context c
 }
 
 DoubleStackAllocator::~DoubleStackAllocator() {
-  mem::freeBlock(data_);
+//  mem::freeBlock(data_);
 }
 
 u32 DoubleStackAllocator::capacityInBytes() const {
@@ -54,7 +54,7 @@ u32 DoubleStackAllocator::availableUpperSizeInBytes() const {
 }
 
 void DoubleStackAllocator::resize(u32 size_in_bytes, mem::Context context) {
-  data_ = mem::allocateBlock(size_in_bytes, context);
+//  data_ = mem::allocateBlock(size_in_bytes, context);
   capacity_ = size_in_bytes;
   threshold_ = capacity_ + 1;
   lower_marker_ = 0;
@@ -71,7 +71,7 @@ void *DoubleStackAllocator::allocateLower(u64 block_size_in_bytes) {
     return nullptr;
   const auto marker = lower_marker_;
   lower_marker_ += block_size_in_bytes;
-  return reinterpret_cast<void *>(reinterpret_cast<u8 *>(data_.ptr) + marker);
+  return reinterpret_cast<void *>(reinterpret_cast<u8 *>(data_) + marker);
 }
 
 void *DoubleStackAllocator::allocateUpper(u64 block_size_in_bytes) {
@@ -80,7 +80,7 @@ void *DoubleStackAllocator::allocateUpper(u64 block_size_in_bytes) {
     return nullptr;
   const auto marker = upper_marker_;
   upper_marker_ -= block_size_in_bytes;
-  return reinterpret_cast<void *>(reinterpret_cast<u8 *>(data_.ptr) + marker);
+  return reinterpret_cast<void *>(reinterpret_cast<u8 *>(data_) + marker);
 }
 
 u32 DoubleStackAllocator::topLowerMarker() const {

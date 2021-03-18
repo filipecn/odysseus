@@ -19,57 +19,23 @@
 /// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 /// IN THE SOFTWARE.
 ///
-///\file stack_allocator.cpp.c
+///\file result.h
 ///\author FilipeCN (filipedecn@gmail.com)
-///\date 2021-03-06
+///\date 2021-03-17
 ///
 ///\brief
 
-#include <odysseus/memory/stack_allocator.h>
-
-#include <odysseus/memory/mem.h>
+#ifndef ODYSSEUS_ODYSSEUS_DEBUG_RESULT_H
+#define ODYSSEUS_ODYSSEUS_DEBUG_RESULT_H
 
 namespace odysseus {
 
-StackAllocator::StackAllocator(u32 size_in_bytes, byte *buffer) :
-    data_(buffer), capacity_(size_in_bytes) {
-}
+enum class OdResult {
+  SUCCESS = 0,
+  BAD_ALLOCATION = 1,
+  OUT_OF_BOUNDS = 2
+};
 
-StackAllocator::~StackAllocator() {
-//  delete[] data_;
-}
+};
 
-u32 StackAllocator::capacityInBytes() const {
-  return capacity_;
-}
-
-u32 StackAllocator::availableSizeInBytes() const {
-  return capacity_ - marker_;
-}
-
-void StackAllocator::resize(u32 size_in_bytes) {
-//  delete[] data_;
-  data_ = new u8[size_in_bytes];
-  capacity_ = size_in_bytes;
-}
-
-void *StackAllocator::allocate(u64 block_size_in_bytes) {
-  if (block_size_in_bytes > capacity_ - marker_)
-    return nullptr;
-  const auto marker = marker_;
-  marker_ += block_size_in_bytes;
-  return reinterpret_cast<void *>(data_ + marker);
-}
-
-u32 StackAllocator::topMarker() const {
-  return marker_;
-}
-
-void StackAllocator::freeToMarker(u32 marker) {
-  marker_ = marker;
-}
-void StackAllocator::clear() {
-  marker_ = 0;
-}
-
-}
+#endif //ODYSSEUS_ODYSSEUS_DEBUG_RESULT_H

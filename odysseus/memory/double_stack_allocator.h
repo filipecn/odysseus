@@ -50,7 +50,7 @@ public:
   /****************************************************************************
                                  CONSTRUCTORS
   ****************************************************************************/
-  /// \param size_in_bytes total memory capacity
+  /// \param capacity_in_bytes total memory capacity
   /// \param context
   explicit DoubleStackAllocator(u32 capacity_in_bytes, mem::Context context = mem::Context::HEAP);
   ///
@@ -92,7 +92,7 @@ public:
   void freeToLowerMarker(u32 lower_marker);
 
 private:
-  mem::MemPtr data_{};
+  void* data_{};
   u32 capacity_{0};
   u32 lower_marker_{0};
   u32 upper_marker_{0};

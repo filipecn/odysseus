@@ -26,8 +26,11 @@
 ///\brief
 
 #include <odysseus/memory/mem.h>
+#include <ponos/log/memory_dump.h>
 
 namespace odysseus {
+
+u32 mem::cache_l1_size = 64;
 
 void *mem::allocAligned(size_t size, size_t align) {
   // allocate align more bytes to store shift value
@@ -61,16 +64,30 @@ void mem::freeAligned(void *p_mem) {
   }
 }
 
-mem::MemPtr mem::allocateBlock(size_t size_in_bytes, mem::Context context) {
-  MemPtr ptr{};
-  if (context == Context::HEAP)
-    ptr.ptr = new u8[size_in_bytes];
-  return ptr;
+mem::~mem() {
+  delete[] reinterpret_cast<u8 *>(buffer_);
 }
 
-void mem::freeBlock(mem::MemPtr &ptr) {
-  if (ptr.context == Context::HEAP)
-    delete[] reinterpret_cast<u8 *>(ptr.ptr);
+OdResult mem::init(std::size_t size_in_bytes) {
+  auto &instance = get();
+  instance.buffer_ = new u8[size_in_bytes];
+  if (!instance.buffer_)
+    return OdResult::BAD_ALLOCATION;
+  instance.next_ = instance.buffer_;
+  instance.size_ = size_in_bytes;
+  return OdResult::SUCCESS;
+}
+
+std::size_t mem::availableSize() {
+  auto &instance = get();
+  return instance.size_ - (reinterpret_cast<uintptr_t>(instance.next_) -
+      reinterpret_cast<uintptr_t>(instance.buffer_));
+}
+
+std::string mem::dump(std::size_t start, std::size_t size) {
+  auto &instance = get();
+  return ponos::MemoryDumper::dump(instance.buffer_
+                                       + start, size);
 }
 
 }
