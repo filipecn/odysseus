@@ -37,7 +37,7 @@ include(circe)
 ##########################################
 set(ODYSSEUS_HEADERS
         odysseus/containers/object_pool.h
-        odysseus/debug/assert.h
+        odysseus/debug/debug.h
         odysseus/memory/double_stack_allocator.h
         odysseus/memory/mem.h
         odysseus/memory/pool_allocator.h

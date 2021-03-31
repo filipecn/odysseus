@@ -55,7 +55,7 @@ public:
   ///
   /// \param max_object_count
   /// \param context
-  explicit ObjectPool(u32 max_object_count, mem::Context context = mem::Context::HEAP) {
+  explicit ObjectPool(u32 max_object_count, mem::ContextType context = mem::ContextType::HEAP) {
     std::size_t size_in_bytes = max_object_count * sizeof(u32);
 
 

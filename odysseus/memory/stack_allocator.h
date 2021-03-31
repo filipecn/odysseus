@@ -28,53 +28,121 @@
 #ifndef ODYSSEUS_ODYSSEUS_MEMORY_STACK_ALLOCATOR_H
 #define ODYSSEUS_ODYSSEUS_MEMORY_STACK_ALLOCATOR_H
 
+#include <odysseus/memory/mem.h>
 #include <ponos/common/defs.h>
 
 namespace odysseus {
 
 /// RAII Stack Allocator
+///
+/// \note Handle Construction:
+/// \note The most significant byte of the handle is used to store the alignment
+/// shift and the rest is used to store the address offset + 1 of the first
+/// byte of the allocated block. Suppose the alignment requires a shift of
+/// 3 bytes and the allocated block would start at byte with offset 10.
+/// A 32 bit handle id in this case will have the value of 0x3000000A.
 class StackAllocator {
 public:
   /****************************************************************************
                                  CONSTRUCTORS
   ****************************************************************************/
+  /// \param size_in_bytes
+  explicit StackAllocator(std::size_t size_in_bytes = 0);
   /// \param size_in_bytes total memory capacity
-  explicit StackAllocator(u32 size_in_bytes, byte *buffer);
+  /// \param buffer external allocated memory
+  explicit StackAllocator(std::size_t size_in_bytes, byte *buffer);
   ///
   ~StackAllocator();
   /****************************************************************************
-                                    METHODS
+                                   SIZE
   ****************************************************************************/
   /// \return total stack capacity (in bytes)
-  [[nodiscard]] u32 capacityInBytes() const;
+  [[nodiscard]] std::size_t capacityInBytes() const;
   /// \return available size that can be allocated
-  [[nodiscard]] u32 availableSizeInBytes() const;
+  [[nodiscard]] std::size_t availableSizeInBytes() const;
   /// All previous data is deleted and markers get invalid
   /// \param size_in_bytes total memory capacity
-  void resize(u32 size_in_bytes);
+  OdResult resize(std::size_t size_in_bytes);
+  /****************************************************************************
+                                    ALLOCATION
+  ****************************************************************************/
   /// Allocates a new block from stack top
   /// \param block_size_in_bytes
   /// \return pointer to the new allocated block
-  void *allocate(u64 block_size_in_bytes);
-
+  MemHandle allocate(std::size_t block_size_in_bytes, std::size_t align = 1);
+  ///
+  /// \tparam T
+  /// \tparam P
+  /// \param params
+  /// \return
+  template<typename T, class... P>
+  MemHandle allocateAligned(P &&... params) {
+    auto handle = allocate(sizeof(T), alignof(T));
+    if (!handle.id)
+      return handle;
+    T *ptr = reinterpret_cast<T *>(data_ + ((handle.id & 0xffffff) - 1));
+    new(ptr) T(std::forward<P>(params)...);
+    return handle;
+  }
+  ///
+  /// \tparam T
+  /// \param handle
+  /// \param value
+  /// \return
   template<typename T>
-  T *allocate() {
-    return reinterpret_cast<T *>(allocate(sizeof(T)));
+  OdResult set(MemHandle handle, const T &value) {
+    if (handle.id == 0 || handle.id >= capacity_)
+      return OdResult::INVALID_INPUT;
+    *reinterpret_cast<T *>(data_ + ((handle.id & 0xffffff) - 1)) = value;
+    return OdResult::SUCCESS;
+  }
+  ///
+  /// \tparam T
+  /// \param handle
+  /// \param value
+  /// \return
+  template<typename T>
+  OdResult set(MemHandle handle, T &&value) {
+    if (handle.id == 0 || handle.id >= capacity_)
+      return OdResult::INVALID_INPUT;
+    *reinterpret_cast<T *>(data_ + ((handle.id & 0xffffff) - 1)) = std::forward<T>(value);
+    return OdResult::SUCCESS;
+  }
+  ///
+  /// \tparam T
+  /// \param handle
+  /// \return
+  template<typename T>
+  T *get(MemHandle handle) {
+    ASSERT(handle.id > 0 && ((handle.id & 0xffffff) - 1) < capacity_)
+    return reinterpret_cast<T *>(data_ + ((handle.id & 0xffffff) - 1));
   }
 
-  /// \return a marker to the current stack top
-  [[nodiscard]] u32 topMarker() const;
   /// Roll the stack back to a previous marker point
   /// \param marker
-  void freeToMarker(u32 marker);
+  OdResult freeTo(MemHandle handle);
   /// Roll stack back to zero
   void clear();
 
+  /****************************************************************************
+                                   DEBUG
+  ****************************************************************************/
+#ifdef ODYSSEUS_DEBUG
+  void dump(std::size_t start = 0, std::size_t size = 0) const;
+  std::vector<ponos::MemoryDumper::Region> getDataRegions();
+  [[nodiscard]]static std::vector<ponos::MemoryDumper::Region> getRegions();
+#endif
+
 private:
   byte *data_{nullptr};
-  u32 capacity_{0};
-  u32 marker_{0};
+  std::size_t capacity_{0};
+  std::size_t marker_{0};
+  bool using_extern_memory_{false};
 
+#ifdef ODYSSEUS_DEBUG
+  std::vector<std::size_t> db_handles;
+  std::vector<ponos::MemoryDumper::Region> db_regions;
+#endif
 };
 
 }

@@ -26,50 +26,155 @@
 ///\brief
 
 #include <odysseus/memory/stack_allocator.h>
-
 #include <odysseus/memory/mem.h>
 
 namespace odysseus {
 
-StackAllocator::StackAllocator(u32 size_in_bytes, byte *buffer) :
-    data_(buffer), capacity_(size_in_bytes) {
+#define SA_EXTRACT_MARKER(HANDLE) \
+  ((HANDLE & 0xffffff) - 1)
+
+#define SA_BUILD_HANDLE(MARKER, SHIFT) \
+  ((MARKER + 1u) | (SHIFT << 24u))
+
+StackAllocator::StackAllocator(std::size_t size_in_bytes) {
+  resize(size_in_bytes);
+}
+
+StackAllocator::StackAllocator(std::size_t size_in_bytes, byte *buffer) :
+    data_(buffer), capacity_(size_in_bytes), using_extern_memory_{true} {
 }
 
 StackAllocator::~StackAllocator() {
-//  delete[] data_;
+  if (!using_extern_memory_)
+    delete[] data_;
 }
 
-u32 StackAllocator::capacityInBytes() const {
+std::size_t StackAllocator::capacityInBytes() const {
   return capacity_;
 }
 
-u32 StackAllocator::availableSizeInBytes() const {
+std::size_t StackAllocator::availableSizeInBytes() const {
   return capacity_ - marker_;
 }
 
-void StackAllocator::resize(u32 size_in_bytes) {
-//  delete[] data_;
-  data_ = new u8[size_in_bytes];
+OdResult StackAllocator::resize(std::size_t size_in_bytes) {
+  if (!using_extern_memory_)
+    delete[] data_;
+  else
+    return OdResult::BAD_OPERATION;
+  marker_ = 0;
   capacity_ = size_in_bytes;
+  if (size_in_bytes)
+    data_ = new u8[size_in_bytes];
+  ODYSSEUS_DEBUG_CODE(db_handles.clear();
+                          db_regions.clear();)
+  return OdResult::SUCCESS;
 }
 
-void *StackAllocator::allocate(u64 block_size_in_bytes) {
-  if (block_size_in_bytes > capacity_ - marker_)
-    return nullptr;
+MemHandle StackAllocator::allocate(std::size_t block_size_in_bytes, std::size_t align) {
+  std::size_t
+      actual_size = block_size_in_bytes + mem::rightAlignShift(reinterpret_cast<uintptr_t >(data_ ) + marker_, align);
+  std::size_t shift = actual_size - block_size_in_bytes;
+  if (actual_size > capacity_ - marker_)
+    return {0};
   const auto marker = marker_;
-  marker_ += block_size_in_bytes;
-  return reinterpret_cast<void *>(data_ + marker);
+  marker_ += actual_size;
+  ODYSSEUS_DEBUG_CODE(db_handles.emplace_back(marker);
+                          db_regions.push_back({
+                                                   marker,
+                                                   actual_size,
+                                                   1,
+                                                   ponos::ConsoleColors::color(db_handles.size()),
+                                                   {}
+                                               });
+  )
+  return {SA_BUILD_HANDLE(marker + shift, shift)};
 }
 
-u32 StackAllocator::topMarker() const {
-  return marker_;
+OdResult StackAllocator::freeTo(MemHandle handle) {
+  if (!marker_)
+    return OdResult::BAD_OPERATION;
+  if (!handle.id)
+    return OdResult::INVALID_INPUT;
+  marker_ = SA_EXTRACT_MARKER(handle.id);
+  ODYSSEUS_DEBUG_CODE(
+      std::size_t db_i = 0;
+      for (std::size_t i = 0; i < db_handles.size(); ++i)
+        if (db_handles[i] == marker_)
+          db_i = i;
+      db_handles.resize(db_i);
+      db_regions.resize(db_i);)
+  return OdResult::SUCCESS;
 }
 
-void StackAllocator::freeToMarker(u32 marker) {
-  marker_ = marker;
-}
 void StackAllocator::clear() {
+  ODYSSEUS_DEBUG_CODE(db_handles.clear();
+                          db_regions.clear();)
   marker_ = 0;
 }
+
+#ifdef ODYSSEUS_DEBUG
+void StackAllocator::dump(std::size_t start, std::size_t size) const {
+  ponos::MemoryDumper::dump(data_ + start, size ? size : capacity_ - start,
+                            64, ponos::memory_dumper_options::colored_output
+                                | ponos::memory_dumper_options::cache_align,
+                            db_regions);
+}
+
+std::vector<ponos::MemoryDumper::Region> StackAllocator::getRegions() {
+  std::vector<ponos::MemoryDumper::Region> regions = {
+      { // data_
+          0,
+          sizeof(data_),
+          1,
+          ponos::ConsoleColors::color(1),
+          {}
+      },
+      { // capacity_
+          sizeof(data_),
+          sizeof(capacity_),
+          1,
+          ponos::ConsoleColors::color(2),
+          {}
+      },
+      { // marker_
+          sizeof(data_) + sizeof(capacity_),
+          sizeof(marker_),
+          1,
+          ponos::ConsoleColors::color(3),
+          {}
+      },
+      { // capacity
+          sizeof(data_) + sizeof(capacity_) + sizeof(marker_),
+          sizeof(using_extern_memory_),
+          1,
+          ponos::ConsoleColors::color(4),
+          {}
+      },
+      { // db_handles
+          offsetof(StackAllocator, db_handles),
+          sizeof(db_handles),
+          1,
+          ponos::ConsoleColors::color(5),
+          {}
+      },
+      { // db_regions
+          offsetof(StackAllocator, db_regions),
+          sizeof(db_regions),
+          1,
+          ponos::ConsoleColors::color(6),
+          {}
+      },
+  };
+  return std::move(regions);
+}
+
+std::vector<ponos::MemoryDumper::Region> StackAllocator::getDataRegions() {
+  return db_regions;
+}
+#endif
+
+#undef SA_EXTRACT_MARKER
+#undef SA_BUILD_HANDLE
 
 }

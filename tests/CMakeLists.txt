@@ -19,11 +19,12 @@ if (UNIX AND NOT APPLE)
 
     add_custom_target(test_odysseus
             COMMAND lcov --directory . --zerocounters
-            COMMAND ponos_tests DEPENDS ponos_tests
+            COMMAND odysseus_tests DEPENDS odysseus_tests
             COMMAND lcov --directory . --capture -output-file cov.info
             COMMAND lcov --remove cov.info '/usr/*' --output-file cov.info
             COMMAND lcov --remove cov.info '*/ext/*' --output-file cov.info
             COMMAND lcov --remove cov.info '*/tests/*' --output-file cov.info
+            COMMAND lcov --remove cov.info '*/ponos/*' --output-file cov.info
             COMMAND genhtml cov.info --output-directory out
             )
 else (UNIX AND NOT APPLE)

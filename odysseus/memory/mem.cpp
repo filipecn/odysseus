@@ -27,10 +27,11 @@
 
 #include <odysseus/memory/mem.h>
 #include <ponos/log/memory_dump.h>
+#include <odysseus/memory/stack_allocator.h>
 
 namespace odysseus {
 
-u32 mem::cache_l1_size = 64;
+[[maybe_unused]] u32 mem::cache_l1_size = 64;
 
 void *mem::allocAligned(size_t size, size_t align) {
   // allocate align more bytes to store shift value
@@ -46,7 +47,7 @@ void *mem::allocAligned(size_t size, size_t align) {
   // determine the shift and store it
   ptrdiff_t shift = p_aligned_mem - p_raw_mem;
   // alignment can't be greater than 256
-  ASSERT(shift > 0 && shift <= 256);
+  ASSERT(shift > 0 && shift <= 256)
   p_aligned_mem[-1] = static_cast<u8>(shift & 0xFF);
   return p_aligned_mem;
 }
@@ -84,11 +85,21 @@ std::size_t mem::availableSize() {
       reinterpret_cast<uintptr_t>(instance.buffer_));
 }
 
+#ifdef ODYSSEUS_DEBUG
 std::string mem::dump(std::size_t start, std::size_t size) {
   auto &instance = get();
+  for (auto context_allocator : instance.odb_context_allocators)
+    if (context_allocator.type == ContextAllocatorType::STACK_ALLOCATOR)
+      instance.odb_regions[context_allocator.region_index].sub_regions =
+          reinterpret_cast<StackAllocator *>(
+              context_allocator.ptr)->getDataRegions();
+
   return ponos::MemoryDumper::dump(instance.buffer_
-                                       + start, size);
+                                       + start, size ? size : instance.size_, 16,
+                                   ponos::memory_dumper_options::colored_output,
+                                   instance.odb_regions);
 }
+#endif
 
 }
 

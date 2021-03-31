@@ -25,9 +25,45 @@
 ///
 ///\brief
 
-#ifndef ODYSSEUS_ODYSSEUS_DEBUG_ASSERT_H
-#define ODYSSEUS_ODYSSEUS_DEBUG_ASSERT_H
+#ifndef ODYSSEUS_ODYSSEUS_DEBUG_DEBUG_H
+#define ODYSSEUS_ODYSSEUS_DEBUG_DEBUG_H
 
+/****************************************************************************
+                          COMPILATION WARNINGS
+****************************************************************************/
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif
+/****************************************************************************
+                             DEBUG MODE
+****************************************************************************/
+#ifndef ODYSSEUS_DEBUG
+#define ODYSSEUS_DEBUG
+#endif
+
+#ifdef ODYSSEUS_DEBUG
+#define ODYSSEUS_DEBUG_CODE(CODE_CONTENT) {CODE_CONTENT}
+#else
+#define ODYSSEUS_DEBUG_CODE(CODE_CONTENT)
+#endif
+/****************************************************************************
+                             CHECKS
+****************************************************************************/
+#if CHECKS_ENABLED
+
+#define CHECK_EXP(expr) \
+  if(expr) {}          \
+  else {               \
+    reportAssertionFailure(#expr, __FILE__, __LINE__);\
+  }
+#else
+
+#define CHECK_EXP(expr)
+
+#endif // CHECKS_ENABLED
+/****************************************************************************
+                             ASSERTION
+****************************************************************************/
 #if ASSERTIONS_ENABLED
 
 #define debugBreak() asm { int 3 }
@@ -42,6 +78,6 @@
 
 #define ASSERT(expr)
 
-#endif
+#endif // ASSERTIONS_ENABLED
 
-#endif //ODYSSEUS_ODYSSEUS_DEBUG_ASSERT_H
+#endif //ODYSSEUS_ODYSSEUS_DEBUG_DEBUG_H

@@ -44,7 +44,7 @@ public:
   /// \param object_size_in_bytes
   /// \param object_count
   /// \param context
-  PoolAllocator(u32 object_size_in_bytes, u32 object_count, mem::Context context = mem::Context::HEAP);
+  PoolAllocator(u32 object_size_in_bytes, u32 object_count, mem::ContextType context = mem::ContextType::HEAP);
   ///
   ~PoolAllocator();
   /****************************************************************************

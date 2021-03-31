@@ -48,7 +48,7 @@ void dumpAvailableList(void *ptr, u32 head, u32 object_count, u32 object_size_in
   }
 }
 
-PoolAllocator::PoolAllocator(u32 object_size_in_bytes, u32 object_count, mem::Context context)
+PoolAllocator::PoolAllocator(u32 object_size_in_bytes, u32 object_count, mem::ContextType context)
     : capacity_{object_count}, object_size_in_bytes_{object_size_in_bytes} {
   ASSERT(object_size_in_bytes >= sizeof(u32));
 //  data_ = mem::allocateBlock(object_size_in_bytes * object_count, context);

@@ -29,12 +29,28 @@
 #define ODYSSEUS_ODYSSEUS_MEMORY_MEM_H
 
 #include <ponos/common/defs.h>
-#include <odysseus/debug/assert.h>
+#include <odysseus/debug/debug.h>
 #include <odysseus/debug/result.h>
 #include <cstdint>
 #include <vector>
+#ifdef ODYSSEUS_DEBUG
+#include <ponos/log/memory_dump.h>
+#endif
 
 namespace odysseus {
+
+#ifdef ODYSSEUS_DEBUG
+class StackAllocator;
+class DoubleStackAllocator;
+#endif
+
+/// Object returned by all memory allocators
+/// Each allocator puts a meaning into its value
+struct MemHandle {
+  /// handle identifier, a value of zero identifies an invalid memory handle
+  const std::size_t id{0};
+  [[nodiscard]] inline bool isValid() const { return id != 0; }
+};
 
 /// Memory Manager Singleton
 /// This class is responsible for managing all memory used in the system by
@@ -43,23 +59,39 @@ namespace odysseus {
 class mem {
 public:
   ///
-  enum class Context {
+  enum class ContextType {
     HEAP,
-    SINGLE_FRAME,
+    SINGLE_FRAME [[maybe_unused]],
   };
   /****************************************************************************
-                             STATIC PUBLIC FIELDS
+                               STATIC PUBLIC FIELDS
   ****************************************************************************/
-  static u32 cache_l1_size;
+  [[maybe_unused]] static u32 cache_l1_size;
   /****************************************************************************
-                               STATIC METHODS
+                               INLINE STATIC METHODS
   ****************************************************************************/
   /// \param number_of_bytes
   /// \param align alignment size in number of bytes
   /// \return the actual amount of bytes necessary to store number_of_bytes
   /// under the alignment
   static inline std::size_t alignTo(std::size_t number_of_bytes, std::size_t align) {
-    return (1 + (number_of_bytes - 1) / align) * align;
+    return number_of_bytes > 0 ? (1u + (number_of_bytes - 1u) / align) * align : 0;
+  }
+  /// \param address
+  /// \param align
+  /// \return
+  static inline std::size_t leftAlignShift(uintptr_t address, std::size_t align) {
+    const std::size_t mask = align - 1;
+    ASSERT((align & mask) == 0);
+    return address - (address & ~mask);
+  }
+  /// \param address
+  /// \param align
+  /// \return
+  static inline std::size_t rightAlignShift(uintptr_t address, std::size_t align) {
+    const std::size_t mask = align - 1;
+    ASSERT((align & mask) == 0);
+    return ((address + mask) & ~mask) - address;
   }
   /// Shifts **address** upwards if necessary to ensure it is aligned to
   /// **align** number of bytes.
@@ -109,19 +141,48 @@ public:
   static OdResult init(std::size_t size_in_bytes);
 
   static std::size_t availableSize();
-
-  template<class AllocatorType>
+  ///
+  /// \tparam AllocatorType
+  /// \param size_in_bytes
+  /// \param context
+  /// \return
+  template<typename AllocatorType>
   static OdResult pushContext(std::size_t size_in_bytes) {
     auto &instance = get();
     // check if mem was initialized first
     if (!instance.buffer_ || !instance.size_)
       return OdResult::BAD_ALLOCATION;
     // check if there is room for the requested context size
-    if (availableSize() < size_in_bytes)
+    if (availableSize() < size_in_bytes + sizeof(AllocatorType))
       return OdResult::OUT_OF_BOUNDS;
     instance.contexts_.push_back({size_in_bytes + sizeof(AllocatorType), instance.next_});
     new(instance.next_) AllocatorType(size_in_bytes,
                                       instance.next_ + sizeof(AllocatorType));
+#ifdef ODYSSEUS_DEBUG
+    instance.odb_regions.push_back({
+                                       reinterpret_cast<uintptr_t>(instance.next_)
+                                           - reinterpret_cast<uintptr_t>(instance.buffer_),
+                                       sizeof(AllocatorType),
+                                       1,
+                                       ponos::ConsoleColors::color(instance.odb_regions.size() + 1),
+                                       AllocatorType::getRegions()
+                                   });
+    instance.odb_regions.push_back({
+                                       reinterpret_cast<uintptr_t>(instance.next_)
+                                           - reinterpret_cast<uintptr_t>(instance.buffer_)
+                                           + sizeof(AllocatorType),
+                                       size_in_bytes,
+                                       1,
+                                       ponos::ConsoleColors::color(instance.odb_regions.size() + 1),
+                                       {}
+                                   });
+    // register allocator
+    if (std::is_same_v<AllocatorType, StackAllocator>)
+      instance.odb_context_allocators.push_back(
+          {instance.odb_regions.size() - 1,
+           ContextAllocatorType::STACK_ALLOCATOR,
+           instance.next_});
+#endif
     instance.next_ += sizeof(AllocatorType) + size_in_bytes;
     return OdResult::SUCCESS;
   }
@@ -132,14 +193,24 @@ public:
     return *reinterpret_cast<AllocatorType *>(instance.contexts_[context_index].ptr);
   }
 
-  /****************************************************************************
-                                DEBUG
-  ****************************************************************************/
-  ///
-  /// \param start
-  /// \param size
-  /// \return
-  static std::string dump(std::size_t start, std::size_t size);
+/****************************************************************************
+                              DEBUG
+****************************************************************************/
+#ifdef ODYSSEUS_DEBUG
+  static std::string dump(std::size_t start = 0, std::size_t size = 0);
+  std::vector<ponos::MemoryDumper::Region> odb_regions;
+  enum class ContextAllocatorType {
+    STACK_ALLOCATOR,
+    DOUBLE_STACK_ALLOCATOR,
+    CUSTOM
+  };
+  struct ContextAllocatorInfo {
+    std::size_t region_index;
+    ContextAllocatorType type;
+    byte *ptr;
+  };
+  std::vector<ContextAllocatorInfo> odb_context_allocators;
+#endif
 
 private:
   mem() = default;

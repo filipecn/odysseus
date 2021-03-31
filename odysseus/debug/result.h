@@ -33,7 +33,9 @@ namespace odysseus {
 enum class OdResult {
   SUCCESS = 0,
   BAD_ALLOCATION = 1,
-  OUT_OF_BOUNDS = 2
+  OUT_OF_BOUNDS = 2,
+  INVALID_INPUT = 3,
+  BAD_OPERATION = 4
 };
 
 };

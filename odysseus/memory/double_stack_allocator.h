@@ -32,7 +32,14 @@
 
 namespace odysseus {
 
+#define DSA_EXTRACT_MARKER(HANDLE) \
+  ((HANDLE & 0xffffff) - 1)
+
+#define DSA_BUILD_HANDLE(MARKER, SHIFT) \
+  ((MARKER + 1u) | (SHIFT << 24u))
+
 /// RAII Double Stack Allocator
+///
 /// Manages two stacks stored in a single memory block, the LOWER stack and
 /// the UPPER stack. Each stack is stored in one end of the memory block,
 /// the LOWER stack is stored in lower addresses while the UPPER stack is
@@ -52,52 +59,131 @@ public:
   ****************************************************************************/
   /// \param capacity_in_bytes total memory capacity
   /// \param context
-  explicit DoubleStackAllocator(u32 capacity_in_bytes, mem::Context context = mem::Context::HEAP);
+  explicit DoubleStackAllocator(std::size_t capacity_in_bytes = 0, byte *buffer = nullptr);
   ///
   ~DoubleStackAllocator();
   /****************************************************************************
                                     SIZE
   ****************************************************************************/
   /// \return total stack capacity (in bytes)
-  [[nodiscard]] u32 capacityInBytes() const;
+  [[nodiscard]] std::size_t capacityInBytes() const;
   /// \return available size that can be allocated in the lower stack
-  [[nodiscard]] u32 availableLowerSizeInBytes() const;
+  [[nodiscard]] std::size_t availableLowerSizeInBytes() const;
   /// \return available size that can be allocated in the upper stack
-  [[nodiscard]] u32 availableUpperSizeInBytes() const;
+  [[nodiscard]] std::size_t availableUpperSizeInBytes() const;
   /// All previous data is deleted and markers get invalid
   /// \param size_in_bytes total memory capacity
-  /// \param context
-  void resize(u32 size_in_bytes, mem::Context context);
+  OdResult resize(std::size_t size_in_bytes);
   /// \param lower_stack_size_in_bytes a value grater than capacity removes the
   /// threshold
-  void setThreshold(u32 lower_stack_size_in_bytes);
+  OdResult setThreshold(std::size_t lower_stack_size_in_bytes);
   /****************************************************************************
                                     ALLOCATION
   ****************************************************************************/
   /// Allocates a new block from lower stack top
   /// \param block_size_in_bytes
   /// \return pointer to the new allocated block
-  void *allocateLower(u64 block_size_in_bytes);
+  MemHandle allocateLower(u64 block_size_in_bytes, std::size_t align = 1);
+  ///
+  /// \tparam T
+  /// \tparam P
+  /// \param params
+  /// \return
+  template<typename T, class... P>
+  MemHandle allocateAlignedLower(P &&... params) {
+    auto handle = allocateLower(sizeof(T), alignof(T));
+    if (!handle.id)
+      return handle;
+    T *ptr = reinterpret_cast<T *>(data_ + ((handle.id & 0xffffff) - 1));
+    new(ptr) T(std::forward<P>(params)...);
+    return handle;
+  }
   /// Allocates a new block from upper stack top
   /// \param block_size_in_bytes
   /// \return pointer to the new allocated block
-  void *allocateUpper(u64 block_size_in_bytes);
-  /// \return a marker to the current lower stack top
-  [[nodiscard]] u32 topLowerMarker() const;
-  /// \return a marker to the current upper stack top
-  [[nodiscard]] u32 topUpperMarker() const;
+  MemHandle allocateUpper(u64 block_size_in_bytes, std::size_t align = 1);
+  ///
+  /// \tparam T
+  /// \tparam P
+  /// \param params
+  /// \return
+  template<typename T, class... P>
+  MemHandle allocateAlignedUpper(P &&... params) {
+    auto handle = allocateUpper(sizeof(T), alignof(T));
+    if (!handle.id)
+      return handle;
+    T *ptr = reinterpret_cast<T *>(data_ + ((handle.id & 0xffffff) - 1));
+    new(ptr) T(std::forward<P>(params)...);
+    return handle;
+  }
   /// \param upper_marker
-  void freeToUpperMarker(u32 upper_marker);
+  OdResult freeToUpperMarker(MemHandle handle);
   /// \param lower_marker
-  void freeToLowerMarker(u32 lower_marker);
+  OdResult freeToLowerMarker(MemHandle handle);
+  /// Roll stack back to zero
+  void clear();
+  ///
+  /// \tparam T
+  /// \param handle
+  /// \param value
+  /// \return
+  template<typename T>
+  OdResult set(MemHandle handle, const T &value) {
+    std::cerr << " handle " << handle.id << std::endl;
+    if (handle.id == 0 || handle.id >= capacity_)
+      return OdResult::INVALID_INPUT;
+    std::cerr << handle.id << std::endl;
+    std::cerr << "====" << ((handle.id & 0xffffff) - 1) << " " <<  value << std::endl;
+    *reinterpret_cast<T *>(data_ + ((handle.id & 0xffffff) - 1)) = value;
+    return OdResult::SUCCESS;
+  }
+  ///
+  /// \tparam T
+  /// \param handle
+  /// \param value
+  /// \return
+  template<typename T>
+  OdResult set(MemHandle handle, T &&value) {
+    if (handle.id == 0 || handle.id >= capacity_)
+      return OdResult::INVALID_INPUT;
+    *reinterpret_cast<T *>(data_ + ((handle.id & 0xffffff) - 1)) = std::forward<T>(value);
+    return OdResult::SUCCESS;
+  }
+  ///
+  /// \tparam T
+  /// \param handle
+  /// \return
+  template<typename T>
+  T *get(MemHandle handle) {
+    ASSERT(handle.id > 0 && ((handle.id & 0xffffff) - 1) < capacity_)
+    return reinterpret_cast<T *>(data_ + ((handle.id & 0xffffff) - 1));
+  }
+
+  /****************************************************************************
+                                   DEBUG
+  ****************************************************************************/
+#ifdef ODYSSEUS_DEBUG
+  void dump(std::size_t start = 0, std::size_t size = 0) const;
+  std::vector<ponos::MemoryDumper::Region> getDataRegions();
+  [[nodiscard]]static std::vector<ponos::MemoryDumper::Region> getRegions();
+#endif
 
 private:
-  void* data_{};
-  u32 capacity_{0};
-  u32 lower_marker_{0};
-  u32 upper_marker_{0};
-  u32 threshold_{0};
+  byte *data_{};
+  std::size_t capacity_{0};
+  std::size_t lower_marker_{0};
+  std::size_t upper_marker_{0};
+  std::size_t threshold_{0};
+  bool using_extern_memory_{false};
+
+#ifdef ODYSSEUS_DEBUG
+  std::vector<std::size_t> odb_handles;
+  std::vector<ponos::MemoryDumper::Region> odb_regions;
+#endif
 };
+
+#undef DSA_BUILD_HANDLE
+#undef DSA_EXTRACT_MARKER
 
 }
 
